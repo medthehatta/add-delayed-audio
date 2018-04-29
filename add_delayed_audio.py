@@ -18,6 +18,30 @@ import gtk
 import sys
 
 
+def audio_device_source(name, device='default'):
+    """An audio source coming from a device."""
+    source = gst.element_factory_make('alsasrc', name)
+    source.set_property('device', device)
+    return source
+
+
+def queue_with_delay(name, delay=0):
+    """A queue that introduces a delay."""
+    queue = gst.element_factory_make('queue', name)
+    queue.set_property("max-size-time", 0)
+    queue.set_property("max-size-buffers", 0)
+    queue.set_property("max-size-bytes", 0)
+    queue.set_property("min-threshold-time", delay)
+    queue.set_property("leaky", "no")
+    return queue
+
+
+def audio_sink(name):
+    """An automatic audio sink."""
+    sink = gst.element_factory_make('autoaudiosink', name)
+    return sink
+
+
 class Main(object):
     """The main Gtk+ class running the Gstreamer pipeline."""
 
