@@ -1,6 +1,9 @@
 #!/usr/bin/python
 
 
+"""Take two input signals, add a delay to one, and sum them."""
+
+
 from __future__ import (
     print_function,  unicode_literals,  division,
 )
@@ -16,6 +19,7 @@ import sys
 
 
 class Main(object):
+    """The main Gtk+ class running the Gstreamer pipeline."""
 
     def __init__(self):
         """Initialize."""
