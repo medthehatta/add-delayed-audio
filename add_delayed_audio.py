@@ -15,7 +15,22 @@ pygst.require("0.10")
 import gst
 import pygtk
 import gtk
+
+
 import sys
+
+
+from hashlib import sha1
+
+
+#
+# Helpers
+#
+
+
+def _hash(data):
+    """A hash of data."""
+    return sha1(str(data)).hexdigest()
 
 
 def audio_device_source(name, device='default'):
@@ -42,15 +57,26 @@ def audio_sink(name):
     return sink
 
 
-def pipeline(*components):
-    """Assemble a gstreamer pipeline of components."""
-    _pipeline = gst.Pipeline('mypipeline')
+def mixed_audio(*components):
+    """Audio output from ``components`` mixed together."""
+    name = _hash(components)
+    mixer = gst.element_factory_make('audiomixer', name)
+    for (i, component) in enumerate(components):
+        component_out_pad = component.get_static_pad('src')
+        mixer_in_pad = mixer.get_pad('sink{}'.format(i))
+        component_out_pad.link(mixer_in_pad)
+    return mixer
 
-    _pipeline.add(*components)
+
+def chain(*components):
+    """Link components together."""
+    _chain = gst.Bin(_hash(components))
+
+    _chain.add(*components)
 
     # If we have fewer than 2 components, we're done
     if len(components) < 2:
-        return _pipeline
+        return _chain
 
     # If we have more than 1 component, link them together
     previous_component = components[0]
@@ -58,6 +84,13 @@ def pipeline(*components):
         previous_component.link(component)
         previous_component = component
 
+    return _chain
+
+
+def pipeline(*components):
+    """Assemble a gstreamer pipeline of components."""
+    _pipeline = gst.Pipeline('mypipeline')
+    _pipeline.add(chain(*components))
     return _pipeline
 
 
@@ -76,8 +109,16 @@ class Main(object):
 
         # Set up the pipeline
         self.delay_pipeline = pipeline(
-            audio_device_source('source', 'default'),
-            queue_with_delay('queue', delay),
+            mixed_audio(
+                chain(
+                    audio_device_source('audiotestsrc', 'default'),
+                    queue_with_delay('queue', 0),
+                ),
+                chain(
+                    audio_device_source('audiotestsrc', 'default'),
+                    queue_with_delay('queue', delay),
+                ),
+            ),
             audio_sink('sink'),
         )
 
