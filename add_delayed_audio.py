@@ -9,18 +9,16 @@ from __future__ import (
 )
 
 
-import pygst
-pygst.require("0.10")
-
-import gst
-import pygtk
-import gtk
-
-
 import sys
 
 
 from hashlib import sha1
+
+
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import Gst
+Gst.init(sys.argv)
 
 
 #
@@ -35,44 +33,61 @@ def _hash(data):
 
 def audio_device_source(name, device='default'):
     """An audio source coming from a device."""
-    source = gst.element_factory_make('alsasrc', name)
+    source = Gst.ElementFactory.make('alsasrc', name)
     source.set_property('device', device)
     return source
 
 
 def queue_with_delay(name, delay=0):
     """A queue that introduces a delay."""
-    queue = gst.element_factory_make('queue', name)
+    queue = Gst.ElementFactory.make('queue', name)
     queue.set_property("max-size-time", 0)
     queue.set_property("max-size-buffers", 0)
     queue.set_property("max-size-bytes", 0)
     queue.set_property("min-threshold-time", delay)
-    queue.set_property("leaky", "no")
+    # queue.set_property("leaky", "no")
     return queue
 
 
 def audio_sink(name):
     """An automatic audio sink."""
-    sink = gst.element_factory_make('autoaudiosink', name)
+    sink = Gst.ElementFactory.make('autoaudiosink', name)
     return sink
 
 
 def mixed_audio(*components):
     """Audio output from ``components`` mixed together."""
     name = _hash(components)
-    mixer = gst.element_factory_make('audiomixer', name)
+    mixer = Gst.ElementFactory.make('audiomixer', name)
     for (i, component) in enumerate(components):
         component_out_pad = component.get_static_pad('src')
-        mixer_in_pad = mixer.get_pad('sink{}'.format(i))
+        mixer_in_pad = mixer.get_request_pad('sink_{}'.format(i))
         component_out_pad.link(mixer_in_pad)
     return mixer
 
 
 def chain(*components):
     """Link components together."""
-    _chain = gst.Bin(_hash(components))
+    _chain = Gst.Bin(_hash(components))
 
     _chain.add(*components)
+
+    # The first component's sink is the chain's sink, and the last
+    # component's src is the chain's src.
+    _chain.add_pad(
+        Gst.GhostPad(
+            'sink',
+            components[0].get_static_pad('sink'),
+            direction=Gst.PadDirection.SINK,
+        ),
+    )
+    _chain.add_pad(
+        Gst.GhostPad(
+            'src',
+            components[-1].get_static_pad('src'),
+            direction=Gst.PadDirection.SRC,
+        ),
+    )
 
     # If we have fewer than 2 components, we're done
     if len(components) < 2:
@@ -89,43 +104,37 @@ def chain(*components):
 
 def pipeline(*components):
     """Assemble a gstreamer pipeline of components."""
-    _pipeline = gst.Pipeline('mypipeline')
+    _pipeline = Gst.Pipeline('mypipeline')
     _pipeline.add(chain(*components))
     return _pipeline
 
 
-class Main(object):
-    """The main Gtk+ class running the Gstreamer pipeline."""
+def main():
+    # Read the command line args to get the delay
+    try:
+        delay = int(float(sys.argv[1]) * 1e9)
+    except IndexError:
+        delay = 0
+    print('Delay: {}'.format(delay))
 
-    def __init__(self):
-        """Initialize."""
-
-        # Read the command line args to get the delay
-        try:
-            delay = int(float(sys.argv[1]) * 1e9)
-        except IndexError:
-            delay = 0
-        print('Delay: {}'.format(delay))
-
-        # Set up the pipeline
-        self.delay_pipeline = pipeline(
-            mixed_audio(
-                chain(
-                    audio_device_source('audiotestsrc', 'default'),
-                    queue_with_delay('queue', 0),
-                ),
-                chain(
-                    audio_device_source('audiotestsrc', 'default'),
-                    queue_with_delay('queue', delay),
-                ),
+    # Set up the pipeline
+    my_pipeline = pipeline(
+        mixed_audio(
+            chain(
+                audio_device_source('audiotestsrc', 'default'),
+                queue_with_delay('queue', 0),
             ),
-            audio_sink('sink'),
-        )
+            chain(
+                audio_device_source('audiotestsrc', 'default'),
+                queue_with_delay('queue', delay),
+            ),
+        ),
+        audio_sink('sink'),
+    )
 
-        # Begin Playing
-        self.delay_pipeline.set_state(gst.STATE_PLAYING)
+    # Begin Playing
+    my_pipeline.set_state(Gst.State.PLAYING)
 
 
 if __name__ == '__main__':
-    start = Main()
-    gtk.main()
+    main()
