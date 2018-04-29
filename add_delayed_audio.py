@@ -42,6 +42,26 @@ def audio_sink(name):
     return sink
 
 
+def pipeline(*components):
+    """Assemble a gstreamer pipeline of components."""
+    _pipeline = gst.Pipeline('mypipeline')
+
+    for component in components:
+        _pipeline.add(component)
+
+    # If we have fewer than 2 components, we're done
+    if len(components) < 2:
+        return _pipeline
+
+    # If we have more than 1 component, link them together
+    previous_component = components[0]
+    for component in components[1:]:
+        previous_component.link(component)
+        previous_component = component
+
+    return _pipeline
+
+
 class Main(object):
     """The main Gtk+ class running the Gstreamer pipeline."""
 
