@@ -77,9 +77,9 @@ class Main(object):
 
         # Set up the pipeline
         self.delay_pipeline = pipeline(
-            audio_device_source('default'),
-            queue_with_delay(delay),
-            audio_sink(),
+            audio_device_source('source', 'default'),
+            queue_with_delay('queue', delay),
+            audio_sink('sink'),
         )
 
         # Begin Playing
