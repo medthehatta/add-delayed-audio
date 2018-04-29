@@ -46,8 +46,7 @@ def pipeline(*components):
     """Assemble a gstreamer pipeline of components."""
     _pipeline = gst.Pipeline('mypipeline')
 
-    for component in components:
-        _pipeline.add(component)
+    _pipeline.add(*components)
 
     # If we have fewer than 2 components, we're done
     if len(components) < 2:
