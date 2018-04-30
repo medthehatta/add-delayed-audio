@@ -188,7 +188,7 @@ def main():
     #             audio_device_source('src1', 'hd:0,1'),
     #             queue_with_delay('queue1', delay),
     #         ),
-    #         audio_device_source('src2', 'hd:0,1'),
+    #         audio_device_source('src2', 'hd:1,1'),
     #     ),
     #     audio_sink('sink'),
     # )
