@@ -19,6 +19,10 @@ from gi.repository import Gst
 Gst.init(None)
 
 
+#  Note to the reader: execution begins in the main() function, which is at the
+#  bottom of the file.
+
+
 #
 # Helpers
 #
@@ -152,6 +156,7 @@ def pipeline(*components):
 
 
 def main():
+    # Get command-line arguments
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -163,6 +168,7 @@ def main():
     )
     parsed = parser.parse_args()
 
+    # Extract the delay from the arguments
     delay = parsed.delay
     print('Delay: {}'.format(delay))
 
@@ -173,10 +179,24 @@ def main():
         audio_sink('sink'),
     )
 
+    # TODO: We actually want this pipeline, but ``mixed_audio`` doesn't
+    # work yet:
+    #
+    # my_pipeline = pipeline(
+    #     mixed_audio(
+    #         chain(
+    #             audio_device_source('src1', 'hd:0,1'),
+    #             queue_with_delay('queue1', delay),
+    #         ),
+    #         audio_device_source('src2', 'hd:0,1'),
+    #     ),
+    #     audio_sink('sink'),
+    # )
+
     # Begin Playing
     my_pipeline.set_state(Gst.State.PLAYING)
 
-    # Wait for error or end of signal
+    # Wait for error or end of signal, then stop the pipeline.
     bus = my_pipeline.get_bus()
     while True:
         try:
