@@ -15,7 +15,7 @@ from hashlib import sha1
 import gi
 gi.require_version('Gst', '1.0')
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gst, GObject, Gtk
+from gi.repository import Gst
 Gst.init(None)
 
 
@@ -89,7 +89,11 @@ def queue_with_delay(name, delay=0):
 
 
 def mixed_audio(*components):
-    """Audio output from ``components`` mixed together."""
+    """
+    Audio output from ``components`` mixed together.
+
+    FIXME: Doesn't work!  No sound gets through this for some reason.
+    """
     name = _hash(components)
     mixer = Gst.ElementFactory.make('audiomixer', name)
     for (i, component) in enumerate(components):
@@ -164,30 +168,29 @@ def main():
 
     # Set up the pipeline
     my_pipeline = pipeline(
-        mixed_audio(
-            chain(
-                audio_test_source('test1'),
-                queue_with_delay('queue1', delay),
-            ),
-        ),
+        audio_test_source('test1'),
+        queue_with_delay('queue1', delay),
         audio_sink('sink'),
     )
 
     # Begin Playing
     my_pipeline.set_state(Gst.State.PLAYING)
 
+    # Wait for error or end of signal
+    bus = my_pipeline.get_bus()
+    while True:
+        try:
+            msg = bus.timed_pop_filtered(
+                0.5 * Gst.SECOND,
+                Gst.MessageType.ERROR | Gst.MessageType.EOS,
+            )
+            if msg:
+                break
+        except KeyboardInterrupt:
+            break
 
-# --- gtk crap; no need to mess with this stuff below ---
-
-
-class Main(object):
-    """Gtk class required for using gstreamer."""
-
-    def __init__(self):
-        main()
+    my_pipeline.set_state(Gst.State.NULL)
 
 
 if __name__ == '__main__':
-    # Start the pipeline
-    start = Main()
-    Gtk.main()
+    main()
