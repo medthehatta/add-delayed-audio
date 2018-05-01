@@ -164,9 +164,9 @@ def main():
     print('Delay: {}'.format(delay))
 
     # Declare our pipeline elements.
-    source1 = audio_test_source('source1', frequency=100)
+    source1 = audio_test_source('source1', frequency=200)
     # source1 = audio_device_source('source1', 'hd:0,1')
-    source2 = audio_test_source('source2', frequency=100)
+    source2 = audio_test_source('source2', frequency=200)
     # source2 = audio_device_source('source2', 'hd:1,1')
     delay_queue = queue_with_delay('delay', delay)
     mixer = audio_mixer('mixer')
