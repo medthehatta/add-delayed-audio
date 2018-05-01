@@ -10,6 +10,7 @@ from __future__ import (
 
 
 from hashlib import sha1
+from functools import wraps
 
 
 import gi
@@ -45,9 +46,10 @@ def audio_device_source(name, device='default'):
     return source
 
 
-def audio_test_source(name):
+def audio_test_source(name, frequency=400):
     """An audio test source."""
     source = Gst.ElementFactory.make('audiotestsrc', name)
+    source.set_property('freq', frequency)
     return source
 
 
@@ -86,118 +88,46 @@ def queue_with_delay(name, delay=0):
     # queue.set_property('leaky', 'no')
     return queue
 
+#
+# Mixer
+#
+
+
+def audio_mixer(name):
+    """An audio mixer."""
+    return Gst.ElementFactory.make('audiomixer', name)
+
 
 #
 # Combinations
 #
 
 
-def mixed_audio(*components):
+def demux_into(*components, **kwargs):
     """
-    Audio output from ``components`` mixed together.
+    Link all the outputs of the ``components`` into ``demuxer``.
 
-    FIXME: Doesn't work!  No sound gets through this for some reason.
+    ``demuxer`` must be a component which supports adding multiple "sink_%u"
+    pads.
     """
-    name = _hash(components)
-    mixer = Gst.ElementFactory.make('audiomixer', name)
+    element = kwargs.get('demuxer')
     for (i, component) in enumerate(components):
         component_out_pad = component.get_static_pad('src')
-        mixer_in_pad = mixer.get_request_pad('sink_{}'.format(i))
-        component_out_pad.link(mixer_in_pad)
-    return mixer
-
-
-def chain(*components):
-    """A chain of components linked together end-to-end."""
-    _chain = Gst.Bin(_hash(components))
-
-    _chain.add(*components)
-
-    # The first component's sink is the chain's sink, and the last
-    # component's src is the chain's src.
-    _chain.add_pad(
-        Gst.GhostPad(
-            'sink',
-            target=components[0].get_static_pad('sink'),
-            direction=Gst.PadDirection.SINK,
-        ),
-    )
-    _chain.add_pad(
-        Gst.GhostPad(
-            'src',
-            target=components[-1].get_static_pad('src'),
-            direction=Gst.PadDirection.SRC,
-        ),
-    )
-
-    # If we have fewer than 2 components, we're done
-    if len(components) < 2:
-        return _chain
-
-    # If we have more than 1 component, link them together
-    previous_component = components[0]
-    for component in components[1:]:
-        previous_component.link(component)
-        previous_component = component
-
-    return _chain
-
-
-def pipeline(*components):
-    """Assemble a gstreamer pipeline of components."""
-    _pipeline = Gst.Pipeline('mypipeline')
-    _pipeline.add(chain(*components))
-    return _pipeline
+        new_in_pad = element.get_request_pad('sink_{}'.format(i))
+        component_out_pad.link(new_in_pad)
 
 
 #
-# Entry point
+# Execution
 #
 
 
-def main():
-    # Get command-line arguments
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-d',
-        '--delay',
-        default=0,
-        type=float,
-        help='Signal delay.',
-    )
-    parsed = parser.parse_args()
-
-    # Extract the delay from the arguments
-    delay = parsed.delay
-    print('Delay: {}'.format(delay))
-
-    # Set up the pipeline
-    my_pipeline = pipeline(
-        audio_test_source('test1'),
-        queue_with_delay('queue1', delay),
-        audio_sink('sink'),
-    )
-
-    # TODO: We actually want this pipeline, but ``mixed_audio`` doesn't
-    # work yet:
-    #
-    # my_pipeline = pipeline(
-    #     mixed_audio(
-    #         chain(
-    #             audio_device_source('src1', 'hd:0,1'),
-    #             queue_with_delay('queue1', delay),
-    #         ),
-    #         audio_device_source('src2', 'hd:1,1'),
-    #     ),
-    #     audio_sink('sink'),
-    # )
-
+def play_until_interrupt_or_error(pipeline):
     # Begin Playing
-    my_pipeline.set_state(Gst.State.PLAYING)
+    pipeline.set_state(Gst.State.PLAYING)
 
     # Wait for error or end of signal, then stop the pipeline.
-    bus = my_pipeline.get_bus()
+    bus = pipeline.get_bus()
     while True:
         try:
             msg = bus.timed_pop_filtered(
@@ -209,7 +139,58 @@ def main():
         except KeyboardInterrupt:
             break
 
-    my_pipeline.set_state(Gst.State.NULL)
+    pipeline.set_state(Gst.State.NULL)
+
+
+#
+# Entry point
+#
+
+
+def main():
+    # Get the command-line arguments.
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-d',
+        '--delay',
+        default=0,
+        type=float,
+        help='Signal delay.',
+    )
+    parsed = parser.parse_args()
+
+    # Extract the delay from the arguments.
+    delay = parsed.delay
+    print('Delay: {}'.format(delay))
+
+    # Declare our pipeline elements.
+    source1 = audio_test_source('source1', frequency=100)
+    # source1 = audio_device_source('source1', 'hd:0,1')
+    source2 = audio_test_source('source2', frequency=100)
+    # source2 = audio_device_source('source2', 'hd:1,1')
+    delay_queue = queue_with_delay('delay', delay)
+    mixer = audio_mixer('mixer')
+    sink = audio_sink('sink')
+
+    # Assemble the pipeline.
+    pipeline = Gst.Pipeline('pipeline')
+    pipeline.add(source1, source2, delay_queue, mixer, sink)
+
+    # Connect the elements in the pipeline.
+    #
+    # N.B. This MUST be done after the pipeline is assembled (after the
+    # `add()`).
+    #
+    #   source1 --> delay_queue -->|
+    #                              |--> mixer --> sink
+    #   source2 --------------> -->|
+    #
+    source1.link(delay_queue)
+    demux_into(delay_queue, source2, demuxer=mixer)
+    mixer.link(sink)
+
+    play_until_interrupt_or_error(pipeline)
 
 
 if __name__ == '__main__':
