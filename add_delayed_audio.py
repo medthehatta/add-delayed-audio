@@ -10,7 +10,6 @@ from __future__ import (
 
 
 from hashlib import sha1
-from functools import wraps
 
 
 import gi
