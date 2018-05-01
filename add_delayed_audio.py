@@ -83,8 +83,8 @@ def queue_with_delay(name, delay=0):
     queue.set_property('max-size-buffers', 0)
     queue.set_property('max-size-bytes', 0)
     queue.set_property('min-threshold-time', delay_ns)
-    # FIXME: this property doesn't seem to work?
-    # queue.set_property('leaky', 'no')
+    # 0 = "not leaky"
+    queue.set_property('leaky', 0)
     return queue
 
 #
