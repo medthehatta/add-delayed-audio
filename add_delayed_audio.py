@@ -155,7 +155,7 @@ def main():
         '--delay',
         default=0,
         type=float,
-        help='Signal delay.',
+        help='Signal delay (in seconds).',
     )
     parsed = parser.parse_args()
 
