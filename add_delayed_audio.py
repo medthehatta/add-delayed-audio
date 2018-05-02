@@ -94,7 +94,7 @@ def queue_with_delay(name, delay=0):
 
 def audio_mixer(name):
     """An audio mixer."""
-    return Gst.ElementFactory.make('audiomixer', name)
+    return Gst.ElementFactory.make('adder', name)
 
 
 #
